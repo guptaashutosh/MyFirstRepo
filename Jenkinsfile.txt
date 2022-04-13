@@ -1,0 +1,27 @@
+node{
+      stage('Git Checkout'){
+        git branch: 'Feature', credentialsId: 'git-creds', url: 'https://github.com/guptaashutosh/MyFirstRepo.git'  
+      }
+      stage('SonarQube analysis') {
+        def scannerHome = tool name: 'SonarQube Scanner 4.0.0.1744', type: 'hudson.plugins.sonar.SonarRunnerInstallation';
+        withSonarQubeEnv('SonarQube') { // If you have configured more than one global server connection, you can specify its name
+        sh "${scannerHome}/bin/sonar-scanner"
+        }
+    }
+      stage('Build Image/Docker Build'){
+        sh 'docker build -t itzzmeashu/nodeapp:latest .'  
+      }
+      stage('Push Image'){
+        withCredentials([string(credentialsId: 'dockerhub-creds', variable: 'DockerHubPwd')]) {
+        sh "docker login -u itzzmeashu -p ${DockerHubPwd}"
+        }
+        sh 'docker push itzzmeashu/nodeapp:latest'
+      }
+      stage('Deploying app to kubernetes'){
+          def command = '/usr/local/bin/kubectl apply -f deploymentservice.yml'
+          withCredentials([string(credentialsId: 'passssh', variable: 'passssh')]) {
+          sh "sshpass -p ${passssh} scp -o StrictHostKeyChecking=no deploymentservice.yml kcluster@192.168.138.130:/home/kcluster/"
+          sh "sshpass -p ${passssh} ssh -o StrictHostKeyChecking=no kcluster@192.168.138.130 ${command}"
+          }  
+      }
+}
